@@ -1,0 +1,6 @@
+{
+    "text_size": 50,
+    "text_color": "#ff6167",
+    "capture_interval": 13,
+    "font_path": "assets/fonts/Arial.ttf"
+}
