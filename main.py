@@ -1,26 +1,31 @@
 
+import logging
 import cv2
 import time
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QSlider, QPushButton, QColorDialog, QFileDialog, QVBoxLayout, QHBoxLayout
+    QApplication, QWidget, QLabel, QSlider, QPushButton, QColorDialog, QFileDialog, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 import sys
 from study_time_manager import StudyTimeManager
+from task_manager import TaskManager
 
 class TimeLapseCam(QWidget):
     def __init__(self):
         super().__init__()
         self.load_config()
+        self.task_manager = TaskManager()  # 初始化任务管理器
+
         self.init_ui()
         self.setup_directories()
         self.setup_camera()
+
         self.start_time = time.time()
         self.study_time_manager = StudyTimeManager()  # 初始化学习时间管理器
         self.study_time = self.study_time_manager.get_today_study_time()  # 获取今日学习时间
@@ -105,6 +110,39 @@ class TimeLapseCam(QWidget):
         fps_layout.addWidget(self.fps_slider)
         layout.addLayout(fps_layout)
         
+        # Task Dropdown
+        task_dropdown_layout = QHBoxLayout()
+        task_label = QLabel("Select Task:")
+        self.task_dropdown = QComboBox()
+        tasks = self.task_manager.get_all_tasks().keys()
+        self.task_dropdown.addItems(tasks)  # 加载已有任务
+        self.task_dropdown.currentTextChanged.connect(self.select_task)
+        task_dropdown_layout.addWidget(task_label)
+        task_dropdown_layout.addWidget(self.task_dropdown)
+        layout.addLayout(task_dropdown_layout)
+
+        
+           # Set default task if no task is selected
+        if tasks:
+            default_task = list(tasks)[0]
+            self.task_manager.start_task(default_task)
+            self.task_dropdown.setCurrentText(default_task)
+            logging.info(f"Default task selected: {default_task}")
+            #这里会输出到终端吗？logging.info(f"Default task selected: {default_task}")
+            #答案：
+
+        # New Task Input
+        new_task_layout = QHBoxLayout()
+        new_task_label = QLabel("New Task:")
+        self.new_task_input = QLineEdit()
+        self.new_task_input.setPlaceholderText("Enter a new task...")
+        new_task_button = QPushButton("Add Task")
+        new_task_button.clicked.connect(self.add_task)
+        new_task_layout.addWidget(new_task_label)
+        new_task_layout.addWidget(self.new_task_input)
+        new_task_layout.addWidget(new_task_button)
+        layout.addLayout(new_task_layout)
+        
         # Start/Stop Button
         self.start_button = QPushButton("Start Capturing")
         self.start_button.clicked.connect(self.toggle_capturing)
@@ -125,6 +163,24 @@ class TimeLapseCam(QWidget):
         layout.addLayout(save_exit_layout)
 
         self.setLayout(layout)
+
+    def select_task(self, task_name):
+        """
+        选择任务
+        """
+        self.task_manager.start_task(task_name)
+        #log out the task choose
+        print(f"Task selected: {task_name}")
+
+    def add_task(self):
+        """
+        添加新任务
+        """
+        task_name = self.new_task_input.text()
+        if task_name and task_name not in self.task_manager.get_all_tasks():
+            self.task_manager.start_task(task_name)
+            self.task_dropdown.addItem(task_name)
+            self.new_task_input.clear()
 
     def setup_directories(self):
         # Create directories if they don't exist
@@ -208,7 +264,17 @@ class TimeLapseCam(QWidget):
         minutes, seconds = divmod(remainder, 60)
         study_time_str = f"Study Time: {hours:02d}:{minutes:02d}:{seconds:02d}"
         draw.text((10, 10 + self.config["text_size"] + 5), study_time_str, fill=self.config["text_color"], font=font)
+        
+        # current task time
+        task_name = self.task_manager.current_task
+        if task_name:
+            #task_time = self.task_manager.get_task_time(task_name)
+            #hours, remainder = divmod(task_time, 3600)
+            #minutes, seconds = divmod(remainder, 60)
+            task_time_str = f"Task: {task_name} "
+            draw.text((10, 10 + 2 * (self.config["text_size"] + 5)), task_time_str, fill=self.config["text_color"], font=font)
 
+        
         return image
 
     def compile_video(self):
