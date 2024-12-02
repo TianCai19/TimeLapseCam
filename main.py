@@ -12,6 +12,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 import sys
+from study_time_manager import StudyTimeManager
 
 class TimeLapseCam(QWidget):
     def __init__(self):
@@ -21,7 +22,9 @@ class TimeLapseCam(QWidget):
         self.setup_directories()
         self.setup_camera()
         self.start_time = time.time()
-        self.study_time = 0  # in seconds
+        self.study_time_manager = StudyTimeManager()  # 初始化学习时间管理器
+        self.study_time = self.study_time_manager.get_today_study_time()  # 获取今日学习时间
+
         self.capturing = False
         self.timer = QTimer()
         self.timer.timeout.connect(self.capture_frame)
@@ -186,8 +189,9 @@ class TimeLapseCam(QWidget):
 
             # Update study time
             self.study_time += self.config["capture_interval"]
-
-            self.status_label.setText(f"Status: Captured {frame_filename}")
+            
+            self.study_time_manager.add_study_time(self.config["capture_interval"])  # 保存到文件
+            self.status_label.setText(f"Status: Captured {frame_filename}. Study Time: {self.study_time} seconds")
         else:
             self.status_label.setText("Status: Failed to capture frame")
 
