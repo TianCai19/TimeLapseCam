@@ -15,6 +15,7 @@ from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 import sys
 from study_time_manager import StudyTimeManager
 from task_manager import TaskManager
+from visualize_logs import LogVisualizer
 
 class DateSelectorDialog(QDialog):
     def __init__(self, parent=None):
@@ -223,6 +224,11 @@ class TimeLapseCam(QWidget):
             video_buttons_layout.addWidget(self.generate_today_video_button)
             video_buttons_layout.addWidget(self.generate_video_button)
             layout.addLayout(video_buttons_layout)
+
+            # Add Visualize Logs Button
+            visualize_logs_button = QPushButton("Visualize Study Logs")
+            visualize_logs_button.clicked.connect(self.open_log_visualizer)
+            layout.addWidget(visualize_logs_button)
 
             self.setLayout(layout)
             logging.info("UI initialized successfully")
@@ -503,6 +509,18 @@ class TimeLapseCam(QWidget):
         layout.addWidget(text_edit)
         self.log_window.setLayout(layout)
         self.log_window.show()
+
+    def open_log_visualizer(self):
+        dialog = DateSelectorDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            selected_date = dialog.calendar.selectedDate().toString('yyyy-MM-dd')
+            visualizer = LogVisualizer()
+            visualizer.visualize_daily_study_time(selected_date)
+
+    def plot_logs(self, visualizer, date_str):
+        dialog = self.sender().parent().parent()
+        dialog.close()
+        visualizer.visualize_daily_study_time(date_str)
 
     def closeEvent(self, event) -> None:
         """
