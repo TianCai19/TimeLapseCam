@@ -92,25 +92,26 @@ class TaskManager:
         if not self.current_task or not self.task_start_time:
             return
 
-        elapsed_time = (datetime.now() - self.task_start_time).total_seconds()
-        self.tasks[self.current_task] += elapsed_time
-        self.task_start_time = None
-        print(f"Task ended: {self.current_task}, time added: {elapsed_time} seconds")
-
-        self.save_tasks()
-        self.current_task = None
-
-        if not self.current_task or not self.task_start_time:
-            return
+        # 计算经过的时间
         end_time = datetime.now()
-        # 更新当前任务的结束时间
-        if self.task_log[self.date_str]:
+        elapsed_time = (end_time - self.task_start_time).total_seconds()
+        
+        # 更新累计时间
+        self.tasks[self.current_task] += elapsed_time
+        
+        # 更新任务日志
+        if self.date_str in self.task_log and self.task_log[self.date_str]:
             self.task_log[self.date_str][-1]["end_time"] = end_time.strftime("%Y-%m-%d %H:%M:%S")
-        # 保存任务日志
+        
+        # 保存数据
+        self.save_tasks()
         self.save_task_log()
-        # 重置当前任务
-        self.current_task = None
+        
+        # 重置当前任务状态
         self.task_start_time = None
+        self.current_task = None
+        
+        print(f"Task ended: {self.current_task}, time added: {elapsed_time} seconds")
 
     def get_task_time(self, task_name):
         """
