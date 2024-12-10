@@ -6,7 +6,7 @@ import json
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QSlider, QPushButton, QColorDialog, QFileDialog, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit
+    QApplication, QWidget, QLabel, QSlider, QPushButton, QColorDialog, QFileDialog, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit, QTextEdit, QCalendarWidget, QDialog
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QColor
@@ -15,11 +15,31 @@ import sys
 from study_time_manager import StudyTimeManager
 from task_manager import TaskManager
 
+class DateSelectorDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("选择日期")
+        layout = QVBoxLayout()
+        
+        self.calendar = QCalendarWidget()
+        layout.addWidget(self.calendar)
+        
+        button_layout = QHBoxLayout()
+        ok_button = QPushButton("确定")
+        cancel_button = QPushButton("取消")
+        ok_button.clicked.connect(self.accept)
+        cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(ok_button)
+        button_layout.addWidget(cancel_button)
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+
 class TimeLapseCam(QWidget):
     def __init__(self):
         super().__init__()
         self.load_config()
-        self.task_manager = TaskManager()  # 初始化任务管理器
+        self.task_manager = TaskManager(task_file="tasks.json", log_file="task_log.json")  # 指定文件路径
 
         self.init_ui()
         self.setup_directories()
@@ -32,6 +52,7 @@ class TimeLapseCam(QWidget):
         self.capturing = False
         self.timer = QTimer()
         self.timer.timeout.connect(self.capture_frame)
+        self.date_str = datetime.now().strftime('%Y-%m-%d')
 
     def load_config(self):
         # Load configuration from config.json
@@ -119,7 +140,7 @@ class TimeLapseCam(QWidget):
         task_dropdown_layout = QHBoxLayout()
         task_label = QLabel("Select Task:")
         self.task_dropdown = QComboBox()
-        tasks = self.task_manager.get_all_tasks().keys()
+        tasks = self.task_manager.get_all_tasks()  # 获取任务列表
         self.task_dropdown.addItems(tasks)  # 加载已有任务
         self.task_dropdown.currentTextChanged.connect(self.select_task)
         task_dropdown_layout.addWidget(task_label)
@@ -129,7 +150,7 @@ class TimeLapseCam(QWidget):
         
            # Set default task if no task is selected
         if tasks:
-            default_task = list(tasks)[0]
+            default_task = tasks[0]
             self.task_manager.start_task(default_task)
             self.task_dropdown.setCurrentText(default_task)
             logging.info(f"Default task selected: {default_task}")
@@ -166,6 +187,33 @@ class TimeLapseCam(QWidget):
         save_exit_layout.addWidget(self.save_button)
         save_exit_layout.addWidget(self.exit_button)
         layout.addLayout(save_exit_layout)
+
+        # 日志按钮
+        log_button = QPushButton("Show Daily Log")
+        log_button.clicked.connect(self.show_daily_log)
+        layout.addWidget(log_button)
+
+        # 在保存和退出按钮之前添加生成视频按钮
+        generate_video_layout = QHBoxLayout()
+        self.generate_video_button = QPushButton("生成视频")
+        self.generate_video_button.clicked.connect(self.show_generate_video_dialog)
+        generate_video_layout.addWidget(self.generate_video_button)
+        layout.addLayout(generate_video_layout)
+
+        # 视频生成按钮组
+        video_buttons_layout = QHBoxLayout()
+        
+        # 生成今日视频按钮
+        self.generate_today_video_button = QPushButton("生成今日视频")
+        self.generate_today_video_button.clicked.connect(self.generate_today_video)
+        
+        # 选择日期生成视频按钮
+        self.generate_video_button = QPushButton("选择日期生成视频")
+        self.generate_video_button.clicked.connect(self.show_generate_video_dialog)
+        
+        video_buttons_layout.addWidget(self.generate_today_video_button)
+        video_buttons_layout.addWidget(self.generate_video_button)
+        layout.addLayout(video_buttons_layout)
 
         self.setLayout(layout)
 
@@ -289,7 +337,18 @@ class TimeLapseCam(QWidget):
             task_time_str = f"Task: {task_name} "
             draw.text((10, 10 + 2 * (self.config["text_size"] + 5)), task_time_str, fill=self.config["text_color"], font=font)
 
-        
+        # 叠加学习总时间
+        study_time = self.study_time_manager.get_today_study_time()
+        hours, remainder = divmod(int(study_time), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        study_time_str = f"Total Study Time: {hours:02d}:{minutes:02d}:{seconds:02d}"
+        draw.text(
+            (10, 10 + 3 * (self.config["text_size"] + 5)),
+            study_time_str,
+            fill=self.config["text_color"],
+            font=font
+        )
+
         return image
 
     def compile_video(self):
@@ -333,11 +392,78 @@ class TimeLapseCam(QWidget):
                 print(f"Error creating video for {date_str}: {e}")
         self.status_label.setText("Status: Videos compiled")
 
+    def show_generate_video_dialog(self):
+        dialog = DateSelectorDialog(self)
+        if dialog.exec_() == QDialog.Accepted:
+            selected_date = dialog.calendar.selectedDate()
+            date_str = selected_date.toString('yyyy-MM-dd')
+            self.generate_video_for_date(date_str)
+
+    def generate_video_for_date(self, date_str):
+        frames_dir = os.path.join('frames', date_str)
+        if not os.path.exists(frames_dir):
+            self.status_label.setText(f"Status: No frames found for {date_str}")
+            return
+
+        output_filename = os.path.join(self.output_dir, f"timelapse_{date_str}.mp4")
+        frame_files = sorted(
+            [os.path.join(frames_dir, f) for f in os.listdir(frames_dir) if f.endswith('.png')]
+        )
+        
+        if not frame_files:
+            self.status_label.setText(f"Status: No frames found for {date_str}")
+            return
+
+        fps = self.fps_slider.value()
+        try:
+            clip = ImageSequenceClip(frame_files, fps=fps)
+            clip.write_videofile(output_filename, codec='libx264')
+            self.status_label.setText(f"Status: Video saved to {output_filename}")
+        except Exception as e:
+            self.status_label.setText(f"Status: Error creating video - {str(e)}")
+
+    def generate_today_video(self):
+        """
+        生成今天的视频
+        """
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        self.generate_video_for_date(today_str)
+
+    def show_daily_log(self):
+        """
+        显示每日任务日志和学习记录
+        """
+        # 获取当日任务日志
+        daily_log = self.task_manager.get_daily_log()
+        # 获取当日学习时间
+        study_time = self.study_time_manager.get_today_study_time()
+        # 格式化日志内容
+        log_text = f"Date: {self.date_str}\n\nTasks:\n"
+        for record in daily_log:
+            task_name = record["task_name"]
+            start_time = record["start_time"]
+            end_time = record["end_time"] or "In Progress"
+            log_text += f"- {task_name}: {start_time} - {end_time}\n"
+        hours, remainder = divmod(int(study_time), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        study_time_str = f"\nTotal Study Time: {hours:02d}:{minutes:02d}:{seconds:02d}"
+        log_text += study_time_str
+        # 显示日志窗口
+        self.log_window = QWidget()
+        self.log_window.setWindowTitle("Daily Log")
+        layout = QVBoxLayout()
+        text_edit = QTextEdit()
+        text_edit.setReadOnly(True)
+        text_edit.setText(log_text)
+        layout.addWidget(text_edit)
+        self.log_window.setLayout(layout)
+        self.log_window.show()
+
     def closeEvent(self, event):
-        # Release camera and compile video on exit
+        # 仅结束任务和释放摄像头，不自动生成视频
+        self.task_manager.end_current_task()
         if self.cap.isOpened():
             self.cap.release()
-        self.compile_video()
         event.accept()
 
 def main():

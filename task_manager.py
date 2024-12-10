@@ -3,34 +3,60 @@ import json
 import os
 
 class TaskManager:
-    def __init__(self, task_file="tasks.json"):
+    def __init__(self, task_file="tasks.json", log_file="task_log.json"):
         """
         初始化任务管理器
         Args:
-            task_file (str): 任务数据存储文件路径
+            task_file (str): 任务累计时间数据存储文件路径
+            log_file (str): 任务日志数据存储文件路径
         """
         self.task_file = task_file
+        self.log_file = log_file
         self.tasks = self.load_tasks()
         self.current_task = None
         self.task_start_time = None
+        self.date_str = datetime.now().strftime("%Y-%m-%d")
+        self.task_log = self.load_task_log()
 
     def load_tasks(self):
         """
-        从文件加载任务数据
+        从文件加载任务累计时间数据
         Returns:
             dict: 任务数据 {task_name: total_seconds}
         """
-        if os.path.exists(self.task_file):
-            with open(self.task_file, "r") as f:
-                return json.load(f)
-        return {}
+        if not os.path.exists(self.task_file):
+            with open(self.task_file, "w") as f:
+                json.dump({}, f)
+                
+        with open(self.task_file, "r") as f:
+            return json.load(f)
+
+    def load_task_log(self):
+        """
+        加载任务日志
+        Returns:
+            dict: 任务日志 {date: [{task_name, start_time, end_time}]}
+        """
+        if not os.path.exists(self.log_file):
+            with open(self.log_file, "w") as f:
+                json.dump({}, f)
+                
+        with open(self.log_file, "r") as f:
+            return json.load(f)
 
     def save_tasks(self):
         """
-        保存任务数据到文件
+        保存任务累计时间数据到文件
         """
         with open(self.task_file, "w") as f:
             json.dump(self.tasks, f, indent=4)
+
+    def save_task_log(self):
+        """
+        保存任务日志到文件
+        """
+        with open(self.log_file, "w") as f:
+            json.dump(self.task_log, f, indent=4)
 
     def start_task(self, task_name):
         """
@@ -47,6 +73,18 @@ class TaskManager:
             self.tasks[task_name] = 0  # 初始化任务累计时间
         print(f"Task started: {task_name}")
 
+        self.task_start_time = datetime.now()
+        self.current_task = task_name
+        # 确保当日的任务列表存在
+        if self.date_str not in self.task_log:
+            self.task_log[self.date_str] = []
+        # 记录任务开始
+        self.task_log[self.date_str].append({
+            "task_name": task_name,
+            "start_time": self.task_start_time.strftime("%Y-%m-%d %H:%M:%S"),
+            "end_time": None
+        })
+
     def end_current_task(self):
         """
         结束当前任务并统计时间
@@ -62,6 +100,18 @@ class TaskManager:
         self.save_tasks()
         self.current_task = None
 
+        if not self.current_task or not self.task_start_time:
+            return
+        end_time = datetime.now()
+        # 更新当前任务的结束时间
+        if self.task_log[self.date_str]:
+            self.task_log[self.date_str][-1]["end_time"] = end_time.strftime("%Y-%m-%d %H:%M:%S")
+        # 保存任务日志
+        self.save_task_log()
+        # 重置当前任务
+        self.current_task = None
+        self.task_start_time = None
+
     def get_task_time(self, task_name):
         """
         获取某任务的累计时间
@@ -74,11 +124,15 @@ class TaskManager:
 
     def get_all_tasks(self):
         """
-        获取所有任务的名称及时间
+        获取所有任务的名称列表
         Returns:
-            dict: {task_name: total_seconds}
+            list: 任务名称列表
         """
-        return self.tasks
+        tasks = set(self.tasks.keys())  # 包含来自 tasks.json 的任务名称
+        for day_logs in self.task_log.values():
+            for record in day_logs:
+                tasks.add(record["task_name"])
+        return list(tasks)
 
     def get_daily_work_timeline(self):
         """
@@ -89,3 +143,15 @@ class TaskManager:
         # 假设有日志文件记录每个任务切换的时间，可在此实现更详细的时间线分析
         # Placeholder: 可扩展为从日志文件读取并分析
         return [{"task": task, "time": timedelta(seconds=time)} for task, time in self.tasks.items()]
+
+    def get_daily_log(self, date_str=None):
+        """
+        获取指定日期的任务日志
+        Args:
+            date_str (str): 日期字符串，格式为 'YYYY-MM-DD'。默认为今天。
+        Returns:
+            list: 当日的任务记录列表
+        """
+        if date_str is None:
+            date_str = self.date_str
+        return self.task_log.get(date_str, [])

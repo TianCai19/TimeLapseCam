@@ -55,3 +55,21 @@ class StudyTimeManager:
             dict: 所有学习时间数据（以日期为键）
         """
         return self.data
+
+    def get_study_time_for_date(self, date_str):
+        """
+        获取指定日期的学习时间
+        Args:
+            date_str (str): 日期字符串，格式为 'YYYY-MM-DD'
+        Returns:
+            int: 学习时间（秒）
+        """
+        return self.data.get(date_str, 0)
+
+    def get_study_records(self):
+        """
+        获取所有学习时间记录
+        Returns:
+            dict: 所有学习时间数据（以日期为键）
+        """
+        return self.data
