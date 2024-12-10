@@ -1,7 +1,5 @@
-
 import json
 import os
-import matplotlib.pyplot as plt
 from datetime import datetime
 
 class LogVisualizer:
@@ -43,6 +41,20 @@ class LogVisualizer:
         plt.xticks(rotation=45)
         plt.tight_layout()
         plt.show()
+
+    def get_daily_data(self, date_str):
+        if date_str not in self.logs:
+            print(f"No logs found for {date_str}.")
+            return {}
+        tasks = self.logs[date_str]
+        task_times = {}
+        for task in tasks:
+            if task["end_time"]:
+                start = datetime.strptime(task["start_time"], "%Y-%m-%d %H:%M:%S")
+                end = datetime.strptime(task["end_time"], "%Y-%m-%d %H:%M:%S")
+                duration = (end - start).total_seconds() / 3600  # in hours
+                task_times[task["task_name"]] = task_times.get(task["task_name"], 0) + duration
+        return task_times
 
 if __name__ == "__main__":
     visualizer = LogVisualizer()

@@ -16,6 +16,8 @@ import sys
 from study_time_manager import StudyTimeManager
 from task_manager import TaskManager
 from visualize_logs import LogVisualizer
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
 
 class DateSelectorDialog(QDialog):
     def __init__(self, parent=None):
@@ -60,6 +62,12 @@ class TimeLapseCam(QWidget):
         self.timer.timeout.connect(self.capture_frame)
         self.date_str = datetime.now().strftime('%Y-%m-%d')
 
+        # Default to displaying today's data
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        visualizer = LogVisualizer()
+        data = visualizer.get_daily_data(today_str)
+        self.display_visualization(data, today_str)
+
     def load_config(self):
         # Load configuration from config.json
         default_config = {
@@ -92,7 +100,7 @@ class TimeLapseCam(QWidget):
         """
         try:
             self.setWindowTitle("TimeLapseCam")
-            self.setGeometry(100, 100, 400, 300)
+            self.setGeometry(100, 100, 500, 800)  # Further increased width and height
 
             layout = QVBoxLayout()
 
@@ -137,7 +145,7 @@ class TimeLapseCam(QWidget):
             self.fps_slider.setMinimum(1)
             self.fps_slider.setMaximum(60)  # 支持 1 到 30 帧
             self.fps_slider.setValue(2)  # 默认帧率 2 (每帧 0.5 秒)
-            # 显示当前帧率
+            # 显示��前帧率
             self.fps_value_label = QLabel(str(self.fps_slider.value()))  # 显示当前帧率值
             
             # read from config
@@ -230,6 +238,10 @@ class TimeLapseCam(QWidget):
             visualize_logs_button.clicked.connect(self.open_log_visualizer)
             layout.addWidget(visualize_logs_button)
 
+            # Add Visualization Display
+            self.visualization_canvas = FigureCanvas(Figure(figsize=(16, 8)))  # Further increased figure size
+            layout.addWidget(self.visualization_canvas)
+
             self.setLayout(layout)
             logging.info("UI initialized successfully")
         except Exception as e:
@@ -249,7 +261,7 @@ class TimeLapseCam(QWidget):
         添加新任务
         """
         task_name = self.new_task_input.text()
-        if task_name and task_name not in self.task_manager.get_all_tasks():
+        if (task_name and task_name not in self.task_manager.get_all_tasks()):
             self.task_manager.start_task(task_name)
             self.task_dropdown.addItem(task_name)
             self.new_task_input.clear()
@@ -330,7 +342,7 @@ class TimeLapseCam(QWidget):
                 pil_image = Image.fromarray(frame_rgb)
 
                 # Resize image to target size
-                if pil_image.size != self.target_size:
+                if (pil_image.size != self.target_size):
                     pil_image = pil_image.resize(self.target_size, Image.LANCZOS)
 
                 # Overlay text
@@ -511,11 +523,31 @@ class TimeLapseCam(QWidget):
         self.log_window.show()
 
     def open_log_visualizer(self):
+        selected_date = self.select_date_via_dialog()
+        if selected_date:
+            visualizer = LogVisualizer()
+            data = visualizer.get_daily_data(selected_date)
+            self.display_visualization(data, selected_date)
+    
+    def select_date_via_dialog(self):
         dialog = DateSelectorDialog(self)
         if dialog.exec_() == QDialog.Accepted:
-            selected_date = dialog.calendar.selectedDate().toString('yyyy-MM-dd')
-            visualizer = LogVisualizer()
-            visualizer.visualize_daily_study_time(selected_date)
+            return dialog.calendar.selectedDate().toString('yyyy-MM-dd')
+        return None
+
+    def display_visualization(self, data, date_str):
+        self.visualization_canvas.figure.clf()
+        ax = self.visualization_canvas.figure.add_subplot(111)
+        
+        tasks = list(data.keys())
+        hours = list(data.values())
+        ax.bar(tasks, hours, color='skyblue')
+        ax.set_xlabel('Tasks')
+        ax.set_ylabel('Hours Spent')
+        ax.set_title(f'Study Time for {date_str}')
+        ax.tick_params(axis='x', rotation=45)
+        self.visualization_canvas.figure.tight_layout()
+        self.visualization_canvas.draw()
 
     def plot_logs(self, visualizer, date_str):
         dialog = self.sender().parent().parent()
