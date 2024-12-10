@@ -1,4 +1,3 @@
-
 import logging
 import cv2
 import time
@@ -41,6 +40,7 @@ class TimeLapseCam(QWidget):
             "text_color": "#FFFFFF",
             "capture_interval": 5,
             "font_path": "assets/fonts/Arial.ttf"
+            
         }
         if not os.path.exists('config.json'):
             with open('config.json', 'w') as f:
@@ -104,8 +104,13 @@ class TimeLapseCam(QWidget):
         fps_label = QLabel("Frames per Second (FPS):")
         self.fps_slider = QSlider(Qt.Horizontal)
         self.fps_slider.setMinimum(1)
-        self.fps_slider.setMaximum(30)  # 支持 1 到 30 帧
+        self.fps_slider.setMaximum(60)  # 支持 1 到 30 帧
         self.fps_slider.setValue(2)  # 默认帧率 2 (每帧 0.5 秒)
+        # 显示当前帧率
+        self.fps_value_label = QLabel(str(self.fps_slider.value()))  # 显示当前帧率值
+        
+        # read from config
+        self.fps_slider.setValue(self.config.get("fps", 2))
         fps_layout.addWidget(fps_label)
         fps_layout.addWidget(self.fps_slider)
         layout.addLayout(fps_layout)
@@ -187,6 +192,11 @@ class TimeLapseCam(QWidget):
         os.makedirs('frames', exist_ok=True)
         os.makedirs('output', exist_ok=True)
         os.makedirs(os.path.dirname(self.config["font_path"]), exist_ok=True)
+        self.date_str = datetime.now().strftime('%Y-%m-%d')
+        self.frames_dir = os.path.join('frames', self.date_str)
+        os.makedirs(self.frames_dir, exist_ok=True)
+        self.output_dir = 'output'
+        os.makedirs(self.output_dir, exist_ok=True)
 
     def setup_camera(self):
         # Initialize OpenCV camera
@@ -228,6 +238,8 @@ class TimeLapseCam(QWidget):
         self.save_config()
         self.status_label.setText("Status: Settings Saved")
 
+    target_size = (1920, 1080)  # 目标分辨率
+
     def capture_frame(self):
         ret, frame = self.cap.read()
         if ret:
@@ -235,17 +247,20 @@ class TimeLapseCam(QWidget):
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             pil_image = Image.fromarray(frame_rgb)
 
+            # Resize image to target size
+            if pil_image.size != self.target_size:
+                pil_image = pil_image.resize(self.target_size, Image.LANCZOS)
+
             # Overlay text
             overlaid_image = self.overlay_text(pil_image)
 
             # Save frame
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            frame_filename = f"frames/frame_{timestamp}.png"
+            frame_filename = os.path.join(self.frames_dir, f"frame_{timestamp}.png")
             overlaid_image.save(frame_filename)
 
             # Update study time
             self.study_time += self.config["capture_interval"]
-            
             self.study_time_manager.add_study_time(self.config["capture_interval"])  # 保存到文件
             self.status_label.setText(f"Status: Captured {frame_filename}. Study Time: {self.study_time} seconds")
         else:
@@ -301,6 +316,22 @@ class TimeLapseCam(QWidget):
             print(f"Error creating video: {e}")
 
         self.status_label.setText(f"Status: Video saved to {output_filename}")
+        date_folders = [d for d in os.listdir('frames') if os.path.isdir(os.path.join('frames', d))]
+        for date_str in date_folders:
+            frames_dir = os.path.join('frames', date_str)
+            output_filename = os.path.join(self.output_dir, f"timelapse_{date_str}.mp4")
+            frame_files = sorted(
+                [os.path.join(frames_dir, f) for f in os.listdir(frames_dir) if f.endswith('.png')]
+            )
+            if not frame_files:
+                continue
+            fps = self.fps_slider.value()
+            try:
+                clip = ImageSequenceClip(frame_files, fps=fps)
+                clip.write_videofile(output_filename, codec='libx264')
+            except Exception as e:
+                print(f"Error creating video for {date_str}: {e}")
+        self.status_label.setText("Status: Videos compiled")
 
     def closeEvent(self, event):
         # Release camera and compile video on exit
