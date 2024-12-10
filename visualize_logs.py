@@ -16,7 +16,7 @@ class LogVisualizer:
         with open(self.log_file, "r") as f:
             self.logs = json.load(f)
 
-    def visualize_daily_study_time(self, date_str):
+    def visualize_daily_study_time(self, date_str, orientation='horizontal'):
         if date_str not in self.logs:
             print(f"No logs found for {date_str}.")
             return None
@@ -35,11 +35,16 @@ class LogVisualizer:
         tasks = list(task_times.keys())
         hours = list(task_times.values())
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.bar(tasks, hours, color='skyblue')
-        ax.set_xlabel('Tasks')
-        ax.set_ylabel('Hours Spent')
+        if orientation == 'horizontal':
+            ax.barh(tasks, hours, color='skyblue')
+            ax.set_xlabel('Hours Spent')
+            ax.set_ylabel('Tasks')
+        else:
+            ax.bar(tasks, hours, color='skyblue')
+            ax.set_xlabel('Tasks')
+            ax.set_ylabel('Hours Spent')
         ax.set_title(f'Study Time for {date_str}')
-        ax.tick_params(axis='x', rotation=45)
+        ax.tick_params(axis='y', rotation=45)
         plt.tight_layout()
         return fig
 
