@@ -1,6 +1,7 @@
 import json
 import os
 from datetime import datetime
+import matplotlib.pyplot as plt
 
 class LogVisualizer:
     def __init__(self, log_file="task_log.json"):
@@ -18,7 +19,7 @@ class LogVisualizer:
     def visualize_daily_study_time(self, date_str):
         if date_str not in self.logs:
             print(f"No logs found for {date_str}.")
-            return
+            return None
         tasks = self.logs[date_str]
         task_times = {}
         for task in tasks:
@@ -29,18 +30,18 @@ class LogVisualizer:
                 task_times[task["task_name"]] = task_times.get(task["task_name"], 0) + duration
         if not task_times:
             print(f"No completed tasks for {date_str}.")
-            return
+            return None
         # Plotting
         tasks = list(task_times.keys())
         hours = list(task_times.values())
-        plt.figure(figsize=(10, 6))
-        plt.bar(tasks, hours, color='skyblue')
-        plt.xlabel('Tasks')
-        plt.ylabel('Hours Spent')
-        plt.title(f'Study Time for {date_str}')
-        plt.xticks(rotation=45)
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.bar(tasks, hours, color='skyblue')
+        ax.set_xlabel('Tasks')
+        ax.set_ylabel('Hours Spent')
+        ax.set_title(f'Study Time for {date_str}')
+        ax.tick_params(axis='x', rotation=45)
         plt.tight_layout()
-        plt.show()
+        return fig
 
     def get_daily_data(self, date_str):
         if date_str not in self.logs:

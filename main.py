@@ -18,6 +18,7 @@ from task_manager import TaskManager
 from visualize_logs import LogVisualizer
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+import matplotlib.pyplot as plt
 
 class DateSelectorDialog(QDialog):
     def __init__(self, parent=None):
@@ -65,8 +66,9 @@ class TimeLapseCam(QWidget):
         # Default to displaying today's data
         today_str = datetime.now().strftime('%Y-%m-%d')
         visualizer = LogVisualizer()
-        data = visualizer.get_daily_data(today_str)
-        self.display_visualization(data, today_str)
+        fig = visualizer.visualize_daily_study_time(today_str)
+        if fig:
+            self.display_figure(fig, today_str)
 
     def load_config(self):
         # Load configuration from config.json
@@ -173,7 +175,7 @@ class TimeLapseCam(QWidget):
                 self.task_dropdown.setCurrentText(default_task)
                 logging.info(f"Default task selected: {default_task}")
                 #��里会输出到终端吗？logging.info(f"Default task selected: {default_task}")
-                #答案：
+                #��案：
 
             # New Task Input
             new_task_layout = QHBoxLayout()
@@ -526,28 +528,35 @@ class TimeLapseCam(QWidget):
         selected_date = self.select_date_via_dialog()
         if selected_date:
             visualizer = LogVisualizer()
-            data = visualizer.get_daily_data(selected_date)
-            self.display_visualization(data, selected_date)
-    
+            fig = visualizer.visualize_daily_study_time(selected_date)
+            if fig:
+                self.display_figure(fig, selected_date)
+            else:
+                self.status_label.setText(f"Status: No data to visualize for {selected_date}")
+
+    def display_figure(self, fig, date_str):
+        self.visualization_canvas.figure.clf()
+        canvas_ax = self.visualization_canvas.figure.subplots()
+        for ax in fig.axes:
+            for line in ax.get_children():
+                if isinstance(line, plt.Axes):
+                    pass  # Handle nested axes if any
+                else:
+                    pass  # Customize as needed
+        # Alternatively, you can draw the returned figure directly
+        self.visualization_canvas.figure = fig
+        self.visualization_canvas.draw()
+
     def select_date_via_dialog(self):
         dialog = DateSelectorDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             return dialog.calendar.selectedDate().toString('yyyy-MM-dd')
         return None
 
-    def display_visualization(self, data, date_str):
-        self.visualization_canvas.figure.clf()
-        ax = self.visualization_canvas.figure.add_subplot(111)
-        
-        tasks = list(data.keys())
-        hours = list(data.values())
-        ax.bar(tasks, hours, color='skyblue')
-        ax.set_xlabel('Tasks')
-        ax.set_ylabel('Hours Spent')
-        ax.set_title(f'Study Time for {date_str}')
-        ax.tick_params(axis='x', rotation=45)
-        self.visualization_canvas.figure.tight_layout()
-        self.visualization_canvas.draw()
+    # Deprecate the original display_visualization method
+    # def display_visualization(self, data, date_str):
+    #     # ...existing code...
+    #     pass
 
     def plot_logs(self, visualizer, date_str):
         dialog = self.sender().parent().parent()
