@@ -1,4 +1,5 @@
 import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 import cv2
 import time
 import os
@@ -216,6 +217,7 @@ class TimeLapseCam(QWidget):
         layout.addLayout(video_buttons_layout)
 
         self.setLayout(layout)
+        logging.info("Initializing UI")
 
     def select_task(self, task_name):
         """
@@ -223,7 +225,7 @@ class TimeLapseCam(QWidget):
         """
         self.task_manager.start_task(task_name)
         #log out the task choose
-        print(f"Task selected: {task_name}")
+        logging.info(f"Task selected: {task_name}")
 
     def add_task(self):
         """
@@ -234,6 +236,7 @@ class TimeLapseCam(QWidget):
             self.task_manager.start_task(task_name)
             self.task_dropdown.addItem(task_name)
             self.new_task_input.clear()
+            logging.info(f"New task added: {task_name}")
 
     def setup_directories(self):
         # Create directories if they don't exist
@@ -276,11 +279,13 @@ class TimeLapseCam(QWidget):
             self.start_button.setText("Stop Capturing")
             self.status_label.setText("Status: Capturing")
             self.timer.start(self.config["capture_interval"] * 1000)
+            logging.info("Started capturing")
         else:
             self.capturing = False
             self.start_button.setText("Start Capturing")
             self.status_label.setText("Status: Idle")
             self.timer.stop()
+            logging.info("Stopped capturing")
 
     def save_settings(self):
         self.save_config()
@@ -311,8 +316,10 @@ class TimeLapseCam(QWidget):
             self.study_time += self.config["capture_interval"]
             self.study_time_manager.add_study_time(self.config["capture_interval"])  # 保存到文件
             self.status_label.setText(f"Status: Captured {frame_filename}. Study Time: {self.study_time} seconds")
+            logging.debug(f"Captured frame: {frame_filename}")
         else:
             self.status_label.setText("Status: Failed to capture frame")
+            logging.error("Failed to capture frame")
 
     def overlay_text(self, image):
         draw = ImageDraw.Draw(image)
@@ -394,7 +401,7 @@ class TimeLapseCam(QWidget):
 
     def show_generate_video_dialog(self):
         dialog = DateSelectorDialog(self)
-        if dialog.exec_() == QDialog.Accepted:
+        if (dialog.exec_() == QDialog.Accepted):
             selected_date = dialog.calendar.selectedDate()
             date_str = selected_date.toString('yyyy-MM-dd')
             self.generate_video_for_date(date_str)
@@ -403,6 +410,7 @@ class TimeLapseCam(QWidget):
         frames_dir = os.path.join('frames', date_str)
         if not os.path.exists(frames_dir):
             self.status_label.setText(f"Status: No frames found for {date_str}")
+            logging.warning(f"No frames found for {date_str}")
             return
 
         output_filename = os.path.join(self.output_dir, f"timelapse_{date_str}.mp4")
@@ -412,6 +420,7 @@ class TimeLapseCam(QWidget):
         
         if not frame_files:
             self.status_label.setText(f"Status: No frames found for {date_str}")
+            logging.warning(f"No frames found for {date_str}")
             return
 
         fps = self.fps_slider.value()
@@ -419,8 +428,10 @@ class TimeLapseCam(QWidget):
             clip = ImageSequenceClip(frame_files, fps=fps)
             clip.write_videofile(output_filename, codec='libx264')
             self.status_label.setText(f"Status: Video saved to {output_filename}")
+            logging.info(f"Video saved to {output_filename}")
         except Exception as e:
             self.status_label.setText(f"Status: Error creating video - {str(e)}")
+            logging.error(f"Error creating video for {date_str}: {e}")
 
     def generate_today_video(self):
         """
@@ -464,6 +475,7 @@ class TimeLapseCam(QWidget):
         self.task_manager.end_current_task()
         if self.cap.isOpened():
             self.cap.release()
+        logging.info("Application closed")
         event.accept()
 
 def main():
