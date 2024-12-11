@@ -4,3 +4,4 @@ PyQt5
 moviepy
 numpy
 matplotlib
+pyinstaller

@@ -20,6 +20,9 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
+import sys
+import os
+
 class DateSelectorDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -39,6 +42,14 @@ class DateSelectorDialog(QDialog):
         
         layout.addLayout(button_layout)
         self.setLayout(layout)
+
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller."""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 class TimeLapseCam(QWidget):
     """
@@ -79,15 +90,17 @@ class TimeLapseCam(QWidget):
             "font_path": "assets/fonts/Arial.ttf"
             
         }
-        if not os.path.exists('config.json'):
-            with open('config.json', 'w') as f:
+        config_path = resource_path('config.json')
+        if not os.path.exists(config_path):
+            with open(config_path, 'w') as f:
                 json.dump(default_config, f, indent=4)
             self.config = default_config
         else:
-            with open('config.json', 'r') as f:
+            with open(config_path, 'r') as f:
                 self.config = json.load(f)
         # Ensure font path exists
-        if not os.path.exists(self.config["font_path"]):
+        font_path = resource_path(self.config["font_path"])
+        if not os.path.exists(font_path):
             self.config["font_path"] = "assets/fonts/Arial.ttf"  # fallback to default
             with open('config.json', 'w') as f:
                 json.dump(self.config, f, indent=4)
@@ -273,7 +286,8 @@ class TimeLapseCam(QWidget):
         # Create directories if they don't exist
         os.makedirs('frames', exist_ok=True)
         os.makedirs('output', exist_ok=True)
-        os.makedirs(os.path.dirname(self.config["font_path"]), exist_ok=True)
+        font_dir = resource_path(os.path.dirname(self.config["font_path"]))
+        os.makedirs(font_dir, exist_ok=True)
         self.date_str = datetime.now().strftime('%Y-%m-%d')
         self.frames_dir = os.path.join('frames', self.date_str)
         os.makedirs(self.frames_dir, exist_ok=True)
