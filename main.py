@@ -7,9 +7,9 @@ import json
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 from PyQt5.QtWidgets import (
-    QApplication, QWidget, QLabel, QSlider, QPushButton, QColorDialog, QFileDialog, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit, QTextEdit, QCalendarWidget, QDialog
+    QApplication, QWidget, QLabel, QSlider, QPushButton, QColorDialog, QFileDialog, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit, QTextEdit, QCalendarWidget, QDialog, QProgressBar
 )
-from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt5.QtGui import QColor
 from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 import sys
@@ -50,6 +50,24 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
+
+class VideoGeneratorThread(QThread):
+    finished = pyqtSignal(str)  # 发送生成完成的视频路径
+    error = pyqtSignal(str)     # 发送错误信息
+    
+    def __init__(self, frame_files, output_filename, fps):
+        super().__init__()
+        self.frame_files = frame_files
+        self.output_filename = output_filename
+        self.fps = fps
+        
+    def run(self):
+        try:
+            clip = ImageSequenceClip(self.frame_files, fps=self.fps)
+            clip.write_videofile(self.output_filename, codec='libx264')
+            self.finished.emit(self.output_filename)
+        except Exception as e:
+            self.error.emit(str(e))
 
 class TimeLapseCam(QWidget):
     """
@@ -160,7 +178,7 @@ class TimeLapseCam(QWidget):
             self.fps_slider.setMinimum(1)
             self.fps_slider.setMaximum(60)  # 支持 1 到 30 帧
             self.fps_slider.setValue(2)  # 默认帧率 2 (每帧 0.5 秒)
-            # 显示��前帧率
+            # 显示前帧率
             self.fps_value_label = QLabel(str(self.fps_slider.value()))  # 显示当前帧率值
             
             # read from config
@@ -187,8 +205,8 @@ class TimeLapseCam(QWidget):
                 self.task_manager.start_task(default_task)
                 self.task_dropdown.setCurrentText(default_task)
                 logging.info(f"Default task selected: {default_task}")
-                #��里会输出到终端吗？logging.info(f"Default task selected: {default_task}")
-                #��案：
+                #里会输出到终端吗？logging.info(f"Default task selected: {default_task}")
+                #案：
 
             # New Task Input
             new_task_layout = QHBoxLayout()
@@ -215,23 +233,13 @@ class TimeLapseCam(QWidget):
             save_exit_layout = QHBoxLayout()
             self.save_button = QPushButton("Save Settings")
             self.save_button.clicked.connect(self.save_settings)
-            self.exit_button = QPushButton("Exit")
-            self.exit_button.clicked.connect(self.close)
             save_exit_layout.addWidget(self.save_button)
-            save_exit_layout.addWidget(self.exit_button)
             layout.addLayout(save_exit_layout)
 
             # 日志按钮
             log_button = QPushButton("Show Daily Log")
             log_button.clicked.connect(self.show_daily_log)
             layout.addWidget(log_button)
-
-            # 在保存和退出按钮之前添加生成视频按钮
-            generate_video_layout = QHBoxLayout()
-            self.generate_video_button = QPushButton("生成视频")
-            self.generate_video_button.clicked.connect(self.show_generate_video_dialog)
-            generate_video_layout.addWidget(self.generate_video_button)
-            layout.addLayout(generate_video_layout)
 
             # 视频生成按钮组
             video_buttons_layout = QHBoxLayout()
@@ -468,8 +476,10 @@ class TimeLapseCam(QWidget):
             self.status_label.setText("Status: Error creating video")
 
     def show_generate_video_dialog(self):
+        self.status_label.setText(f"Status: Generating video...")
+        QApplication.processEvents()
         dialog = DateSelectorDialog(self)
-        if (dialog.exec_() == QDialog.Accepted):
+        if dialog.exec_() == QDialog.Accepted:
             selected_date = dialog.calendar.selectedDate()
             date_str = selected_date.toString('yyyy-MM-dd')
             self.generate_video_for_date(date_str)
@@ -492,20 +502,41 @@ class TimeLapseCam(QWidget):
             return
 
         fps = self.fps_slider.value()
-        try:
-            clip = ImageSequenceClip(frame_files, fps=fps)
-            clip.write_videofile(output_filename, codec='libx264')
-            self.status_label.setText(f"Status: Video saved to {output_filename}")
-            logging.info(f"Video saved to {output_filename}")
-        except Exception as e:
-            self.status_label.setText(f"Status: Error creating video - {str(e)}")
-            logging.error(f"Error creating video for {date_str}: {e}")
+
+        # 禁用生成按钮，避免重复点击
+        self.generate_today_video_button.setEnabled(False)
+        self.generate_video_button.setEnabled(False)
+
+        # 创建并启动视频生成线程
+        self.video_thread = VideoGeneratorThread(frame_files, output_filename, fps)
+        self.video_thread.finished.connect(self.on_video_generated)
+        self.video_thread.error.connect(self.on_video_error)
+        self.video_thread.finished.connect(lambda: self.enable_generate_buttons())
+        self.video_thread.error.connect(lambda: self.enable_generate_buttons())
+        self.video_thread.start()
+
+    def enable_generate_buttons(self):
+        """重新启用生成按钮"""
+        self.generate_today_video_button.setEnabled(True)
+        self.generate_video_button.setEnabled(True)
+
+    def on_video_generated(self, output_filename):
+        """视频生成完成的回调"""
+        self.status_label.setText(f"Status: Video saved to {output_filename}")
+        logging.info(f"Video saved to {output_filename}")
+
+    def on_video_error(self, error_msg):
+        """视频生成出错的回调"""
+        self.status_label.setText(f"Status: Error creating video - {error_msg}")
+        logging.error(f"Error creating video: {error_msg}")
 
     def generate_today_video(self):
         """
         生成今天的视频
         """
         today_str = datetime.now().strftime('%Y-%m-%d')
+        self.status_label.setText(f"Status: Generating video...")
+        QApplication.processEvents()
         self.generate_video_for_date(today_str)
 
     def show_daily_log(self):
