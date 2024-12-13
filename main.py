@@ -19,6 +19,7 @@ from visualize_logs import LogVisualizer
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
+from styles import get_main_style, get_start_button_style, get_generate_video_button_style, get_visualize_button_style
 
 import sys
 import os
@@ -136,9 +137,15 @@ class TimeLapseCam(QWidget):
             self.setGeometry(100, 100, 500, 800)  # Further increased width and height
 
             layout = QVBoxLayout()
+            layout.setSpacing(10)  # 设置垂直布局的组件间距
+            layout.setContentsMargins(20, 20, 20, 20)  # 设置布局的外边距
+
+            # 设置主样式
+            self.setStyleSheet(get_main_style())
 
             # Text Size Slider
             text_size_layout = QHBoxLayout()
+            text_size_layout.setSpacing(10)
             text_size_label = QLabel("Text Size:")
             self.text_size_slider = QSlider(Qt.Horizontal)
             self.text_size_slider.setMinimum(10)
@@ -225,6 +232,9 @@ class TimeLapseCam(QWidget):
             self.start_button.clicked.connect(self.toggle_capturing)
             layout.addWidget(self.start_button)
 
+            # 设置开始按钮样式
+            self.start_button.setStyleSheet(get_start_button_style())
+
             # Status Label
             self.status_label = QLabel("Status: Idle")
             layout.addWidget(self.status_label)
@@ -256,10 +266,16 @@ class TimeLapseCam(QWidget):
             video_buttons_layout.addWidget(self.generate_video_button)
             layout.addLayout(video_buttons_layout)
 
+            # 设置生成视频按钮样式
+            self.generate_today_video_button.setStyleSheet(get_generate_video_button_style())
+
             # Add Visualize Logs Button
             visualize_logs_button = QPushButton("Visualize Study Logs")
             visualize_logs_button.clicked.connect(self.open_log_visualizer)
             layout.addWidget(visualize_logs_button)
+
+            # 设置可视化按钮样式
+            visualize_logs_button.setStyleSheet(get_visualize_button_style())
 
             # Add Visualization Display
             self.visualization_canvas = FigureCanvas(Figure(figsize=(16, 8)))  # Further increased figure size
@@ -507,7 +523,7 @@ class TimeLapseCam(QWidget):
         self.generate_today_video_button.setEnabled(False)
         self.generate_video_button.setEnabled(False)
 
-        # 创建并启动视频生成线程
+        # 建并启动视频生成线程
         self.video_thread = VideoGeneratorThread(frame_files, output_filename, fps)
         self.video_thread.finished.connect(self.on_video_generated)
         self.video_thread.error.connect(self.on_video_error)
